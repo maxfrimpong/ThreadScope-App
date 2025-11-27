@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
@@ -6,20 +7,22 @@ import { Scanner } from './pages/Scanner';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { Login } from './pages/Login';
 import { Subscription } from './pages/Subscription';
+import { BotWatch } from './pages/BotWatch';
 import { User, UserRole, SubscriptionTier } from './types';
 
 function App() {
   const [user, setUser] = useState<User | null>(null);
 
-  const handleLogin = (role: UserRole) => {
-    setUser({
-      id: crypto.randomUUID(),
-      name: role === UserRole.ADMIN ? 'Admin User' : 'Security Analyst',
-      email: role === UserRole.ADMIN ? 'admin@threatscope.io' : 'analyst@threatscope.io',
-      role: role,
-      avatar: `https://ui-avatars.com/api/?name=${role}&background=10b981&color=fff`,
-      subscriptionTier: role === UserRole.ADMIN ? SubscriptionTier.ENTERPRISE : SubscriptionTier.FREE
-    });
+  const handleLogin = (loggedInUser: User) => {
+    // If admin, ensure they have enterprise features for the demo
+    if (loggedInUser.role === UserRole.ADMIN) {
+      setUser({
+        ...loggedInUser,
+        subscriptionTier: SubscriptionTier.ENTERPRISE
+      });
+    } else {
+      setUser(loggedInUser);
+    }
   };
 
   const handleLogout = () => {
@@ -59,6 +62,14 @@ function App() {
           <ProtectedRoute>
              <Layout user={user} onLogout={handleLogout}>
               <Scanner user={user} />
+            </Layout>
+          </ProtectedRoute>
+        } />
+
+        <Route path="/bot-watch" element={
+          <ProtectedRoute>
+             <Layout user={user} onLogout={handleLogout}>
+              <BotWatch />
             </Layout>
           </ProtectedRoute>
         } />

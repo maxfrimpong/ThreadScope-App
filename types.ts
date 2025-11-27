@@ -94,3 +94,25 @@ export interface ThreatEvent {
   type: string; // e.g. "DDoS", "SQL Injection", "Malware"
   timestamp: number;
 }
+
+// --- Bot & Traffic Monitoring Types ---
+
+export enum BotCategory {
+  GOOD = 'GOOD',   // Search engines, Uptime monitors
+  BAD = 'BAD',     // Scrapers, Vulnerability scanners
+  NEUTRAL = 'NEUTRAL', // Unknown tools
+  HUMAN = 'HUMAN'  // Real users
+}
+
+export interface BotLog {
+  id: string;
+  timestamp: number;
+  ip: string;
+  method: string;
+  path: string;
+  userAgent: string;
+  botName: string; // Or Browser Name for humans
+  category: BotCategory;
+  statusCode: number;
+  country: string;
+}

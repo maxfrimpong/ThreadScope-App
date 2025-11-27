@@ -1,7 +1,8 @@
+
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { User, UserRole, SubscriptionTier } from '../types';
-import { ShieldAlert, LayoutDashboard, ScanLine, CreditCard, LogOut, Database, Crown } from 'lucide-react';
+import { ShieldAlert, LayoutDashboard, ScanLine, CreditCard, LogOut, Database, Crown, Bot } from 'lucide-react';
 
 interface SidebarProps {
   user: User;
@@ -45,6 +46,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ user, onLogout }) => {
           <Link to="/scan" className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive('/scan') ? 'bg-emerald-500/10 text-emerald-400' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'}`}>
             <ScanLine className="w-5 h-5" />
             <span className="font-medium">New Scan</span>
+          </Link>
+
+          <Link to="/bot-watch" className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${isActive('/bot-watch') ? 'bg-emerald-500/10 text-emerald-400' : 'text-slate-400 hover:bg-slate-900 hover:text-slate-200'}`}>
+            <Bot className="w-5 h-5" />
+            <span className="font-medium">BotWatch</span>
           </Link>
 
           {user.role !== UserRole.ADMIN && (
