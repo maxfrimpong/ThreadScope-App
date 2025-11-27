@@ -1,0 +1,5 @@
+{
+  "name": "ThreatScope AI",
+  "description": "Advanced threat hunting and malware analysis platform powered by Gemini AI. Scan URLs, files, and code snippets for potential security risks.",
+  "requestFramePermissions": []
+}
