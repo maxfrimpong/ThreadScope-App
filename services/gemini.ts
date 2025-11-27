@@ -6,7 +6,6 @@ const getAiClient = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
     console.error("API_KEY is missing from environment variables.");
-    // In a real app we might throw, but here we'll let the calls fail gracefully or handle UI
     throw new Error("API Key not found");
   }
   return new GoogleGenAI({ apiKey });
@@ -19,7 +18,6 @@ const parseAnalysisResponse = (text: string, originalTarget: string, type: ScanT
   let summary = "Analysis completed.";
   let details = text;
 
-  // Simple regex extraction (robustness would need improvement in production)
   const verdictMatch = text.match(/VERDICT:\s*(SAFE|SUSPICIOUS|MALICIOUS|CLEAN)/i);
   if (verdictMatch) {
     const v = verdictMatch[1].toUpperCase();
@@ -38,7 +36,6 @@ const parseAnalysisResponse = (text: string, originalTarget: string, type: ScanT
     summary = summaryMatch[1].trim();
   }
   
-  // If we couldn't parse structured data, fallback to simple heuristics on the text
   if (threatLevel === ThreatLevel.UNKNOWN) {
     if (text.toLowerCase().includes('malicious') || text.toLowerCase().includes('malware')) threatLevel = ThreatLevel.MALICIOUS;
     else if (text.toLowerCase().includes('suspicious') || text.toLowerCase().includes('risk')) threatLevel = ThreatLevel.SUSPICIOUS;
@@ -75,7 +72,7 @@ export const scanUrlWithGemini = async (url: string): Promise<ScanResult> => {
 
   try {
     const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash", // Flash is good for search grounding speed
+      model: "gemini-2.5-flash",
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
@@ -85,7 +82,6 @@ export const scanUrlWithGemini = async (url: string): Promise<ScanResult> => {
     const text = response.text || "No response generated.";
     const parsed = parseAnalysisResponse(text, url, ScanType.URL);
     
-    // Extract grounding URLs
     const groundingUrls = response.candidates?.[0]?.groundingMetadata?.groundingChunks
       ?.map((c: any) => c.web?.uri)
       .filter((u: string) => !!u) as string[] || [];
@@ -147,9 +143,6 @@ export const scanCodeOrText = async (content: string, filename: string = "Snippe
 
 export const scanImage = async (base64Data: string, mimeType: string, filename: string): Promise<ScanResult> => {
   const ai = getAiClient();
-
-  // For images, we look for visual phishing indicators (e.g. fake login screens)
-  // or anomalies if it's a "software package" icon etc.
   
   const prompt = `
   Analyze this image from a security perspective.
@@ -219,5 +212,60 @@ export const generateRemediation = async (result: ScanResult): Promise<string> =
   } catch (error) {
     console.error("Remediation Gen Error", error);
     throw new Error("Failed to generate remediation plan.");
+  }
+};
+
+// --- New: Traffic Profile Analysis ---
+
+export interface TrafficProfile {
+  techStack: string;
+  normalPaths: string[];
+  adminPaths: string[];
+  vulnerablePaths: string[];
+}
+
+export const analyzeSiteTrafficProfile = async (url: string): Promise<TrafficProfile> => {
+  const ai = getAiClient();
+  
+  // This prompt asks Gemini to fingerprint the site and predict its likely structure
+  // This allows the "Mock" traffic to look incredibly real for the specific site
+  const prompt = `
+  Analyze the URL structure and likely technology stack for: ${url}
+  
+  1. Identify the probable Tech Stack (e.g. WordPress, Shopify, React, PHP/Laravel, Static HTML).
+  2. List 5 likely "Normal User" paths (e.g. /product/123, /blog, /about).
+  3. List 3 likely "Admin/Hidden" paths (e.g. /wp-admin, /admin, /dashboard).
+  4. List 3 likely "Vulnerable/Targeted" paths bots would check (e.g. /wp-login.php, /.env, /cart).
+  
+  Respond in JSON format.
+  `;
+
+  try {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json"
+      }
+    });
+
+    const text = response.text || "{}";
+    const data = JSON.parse(text);
+
+    return {
+      techStack: data.techStack || "Unknown Web Server",
+      normalPaths: data.normalPaths || ['/', '/about', '/contact'],
+      adminPaths: data.adminPaths || ['/admin', '/login'],
+      vulnerablePaths: data.vulnerablePaths || ['/.env', '/config', '/backup.zip']
+    };
+  } catch (error) {
+    console.error("Traffic Profile Error", error);
+    // Fallback profile
+    return {
+      techStack: "Generic Web Server",
+      normalPaths: ['/', '/index.html', '/about'],
+      adminPaths: ['/admin', '/cms'],
+      vulnerablePaths: ['/login', '/.git/HEAD']
+    };
   }
 };

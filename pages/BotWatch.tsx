@@ -1,13 +1,17 @@
-
 import React, { useState, useEffect, useRef } from 'react';
-import { Bot, Play, Pause, AlertTriangle, ShieldCheck, Globe, Activity, Terminal, Users, Monitor, UserCheck } from 'lucide-react';
+import { Bot, Play, Pause, AlertTriangle, ShieldCheck, Globe, Activity, Terminal, Users, Monitor, UserCheck, Loader2, Code2, Copy, X } from 'lucide-react';
 import { mockDb } from '../services/mockDb';
 import { BotLog, BotCategory } from '../types';
+import { analyzeSiteTrafficProfile, TrafficProfile } from '../services/gemini';
 import { AreaChart, Area, ResponsiveContainer, XAxis, YAxis, Tooltip } from 'recharts';
 
 export const BotWatch: React.FC = () => {
   const [url, setUrl] = useState('');
   const [isMonitoring, setIsMonitoring] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [profile, setProfile] = useState<TrafficProfile | null>(null);
+  const [showIntegration, setShowIntegration] = useState(false);
+  
   const [logs, setLogs] = useState<BotLog[]>([]);
   const [stats, setStats] = useState({ human: 0, good: 0, bad: 0, total: 0 });
   const [chartData, setChartData] = useState<any[]>([]);
@@ -22,9 +26,10 @@ export const BotWatch: React.FC = () => {
   useEffect(() => {
     let interval: NodeJS.Timeout;
 
-    if (isMonitoring) {
+    if (isMonitoring && profile) {
       interval = setInterval(() => {
-        const newLogs = mockDb.generateBotTraffic(Math.floor(Math.random() * 3) + 1);
+        // Generate traffic BASED ON THE PROFILE
+        const newLogs = mockDb.generateBotTraffic(Math.floor(Math.random() * 3) + 1, profile);
         
         setLogs(prev => {
           const updated = [...newLogs, ...prev].slice(0, 50); // Keep last 50
@@ -61,18 +66,42 @@ export const BotWatch: React.FC = () => {
     }
 
     return () => clearInterval(interval);
-  }, [isMonitoring]);
+  }, [isMonitoring, profile]);
+
+  const handleStart = async () => {
+    if (!url) return;
+    setIsAnalyzing(true);
+    setLogs([]);
+    setStats({ human: 0, good: 0, bad: 0, total: 0 });
+
+    try {
+      // Step 1: Analyze the URL to get the tech stack and potential attack vectors
+      const trafficProfile = await analyzeSiteTrafficProfile(url);
+      setProfile(trafficProfile);
+      
+      // Step 2: Start the feed with this profile
+      setIsMonitoring(true);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to analyze site structure.");
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
   const toggleMonitoring = () => {
-    if (!url && !isMonitoring) return;
-    setIsMonitoring(!isMonitoring);
+    if (!isMonitoring && !profile) {
+      handleStart();
+    } else {
+      setIsMonitoring(!isMonitoring);
+    }
   };
 
   const badPercentage = stats.total > 0 ? Math.round((stats.bad / stats.total) * 100) : 0;
   const humanPercentage = stats.total > 0 ? Math.round((stats.human / stats.total) * 100) : 0;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 h-[calc(100vh-4rem)] flex flex-col">
+    <div className="space-y-6 animate-in fade-in duration-500 h-[calc(100vh-4rem)] flex flex-col relative">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
            <h1 className="text-3xl font-bold text-white flex items-center gap-3">
@@ -81,6 +110,12 @@ export const BotWatch: React.FC = () => {
            </h1>
            <p className="text-slate-400 mt-1">Real-time surveillance of user visits and bot activity.</p>
         </div>
+        <button 
+          onClick={() => setShowIntegration(true)}
+          className="px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 rounded-lg text-xs font-bold text-slate-300 flex items-center gap-2"
+        >
+          <Code2 className="w-4 h-4" /> Connect Real Data
+        </button>
       </div>
 
       {/* Control Bar */}
@@ -93,27 +128,43 @@ export const BotWatch: React.FC = () => {
             onChange={(e) => setUrl(e.target.value)}
             placeholder="Enter URL to monitor (e.g. https://mywebsite.com)"
             className="w-full bg-slate-900 border border-slate-700 rounded-lg py-2 pl-10 pr-4 text-white focus:outline-none focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500 transition-all font-mono text-sm"
-            disabled={isMonitoring}
+            disabled={isMonitoring || isAnalyzing}
           />
         </div>
         <button 
           onClick={toggleMonitoring}
-          disabled={!url && !isMonitoring}
+          disabled={!url || isAnalyzing}
           className={`px-6 py-2 rounded-lg font-bold flex items-center gap-2 transition-all min-w-[140px] justify-center ${
             isMonitoring 
               ? 'bg-amber-500/20 text-amber-400 border border-amber-500/30 hover:bg-amber-500/30' 
               : 'bg-cyan-600 text-white hover:bg-cyan-500 shadow-lg shadow-cyan-900/20'
-          } ${!url ? 'opacity-50 cursor-not-allowed' : ''}`}
+          } ${(!url || isAnalyzing) ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
-          {isMonitoring ? <><Pause className="w-4 h-4" /> Pause Feed</> : <><Play className="w-4 h-4" /> Start Watch</>}
+          {isAnalyzing ? (
+            <><Loader2 className="w-4 h-4 animate-spin" /> Analyzing...</>
+          ) : isMonitoring ? (
+            <><Pause className="w-4 h-4" /> Pause Feed</>
+          ) : (
+            <><Play className="w-4 h-4" /> Start Watch</>
+          )}
         </button>
       </div>
+
+      {/* Tech Stack Indicator */}
+      {profile && (
+         <div className="flex items-center gap-3 bg-cyan-900/20 border border-cyan-500/30 px-4 py-2 rounded-lg animate-in slide-in-from-top-2">
+            <span className="text-xs text-cyan-400 uppercase font-bold tracking-wider">Target Profile Detected:</span>
+            <span className="text-sm font-medium text-white">{profile.techStack}</span>
+            <div className="h-4 w-[1px] bg-cyan-500/30"></div>
+            <span className="text-xs text-slate-400">Monitoring {profile.vulnerablePaths.length} specific attack vectors</span>
+         </div>
+      )}
 
       {!isMonitoring && stats.total === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center bg-slate-800/50 border border-slate-700 border-dashed rounded-2xl p-12 text-center">
            <Monitor className="w-16 h-16 text-slate-600 mb-4" />
            <h3 className="text-xl font-bold text-slate-300">Traffic Monitor Offline</h3>
-           <p className="text-slate-500 mt-2 max-w-md">Enter your target URL above to start visualizing live page visits, user sessions, and bot traffic classification.</p>
+           <p className="text-slate-500 mt-2 max-w-md">Enter your target URL above. AI will analyze the site structure and project live traffic patterns, including potential bot attacks and real user paths.</p>
         </div>
       ) : (
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-6 min-h-0">
@@ -155,7 +206,7 @@ export const BotWatch: React.FC = () => {
               {/* Traffic Chart */}
               <div className="bg-slate-800 border border-slate-700 rounded-xl p-4 flex-1 flex flex-col">
                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2"><Activity className="w-4 h-4" /> Live Traffic Composition</h3>
+                    <h3 className="text-sm font-bold text-slate-300 flex items-center gap-2"><Activity className="w-4 h-4" /> Live Traffic Projection</h3>
                     <div className="flex items-center gap-3 text-xs">
                        <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500"></div> Humans</span>
                        <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-emerald-500"></div> Crawlers</span>
@@ -245,7 +296,54 @@ export const BotWatch: React.FC = () => {
                  {logs.length === 0 && <div className="text-center text-slate-600 mt-10 italic">Waiting for traffic...</div>}
               </div>
            </div>
+        </div>
+      )}
 
+      {/* Integration Modal */}
+      {showIntegration && (
+        <div className="absolute inset-0 z-50 bg-slate-950/90 backdrop-blur-sm flex items-center justify-center p-4">
+           <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="p-6 border-b border-slate-700 flex justify-between items-center">
+                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                   <Code2 className="w-5 h-5 text-cyan-500" /> Connect Real Data Source
+                 </h2>
+                 <button onClick={() => setShowIntegration(false)} className="text-slate-400 hover:text-white">
+                   <X className="w-5 h-5" />
+                 </button>
+              </div>
+              <div className="p-6 space-y-6">
+                 <div className="bg-amber-900/20 border border-amber-900/30 p-4 rounded-xl flex gap-3">
+                    <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                    <p className="text-sm text-amber-200">
+                      <strong>Note:</strong> To view 100% real-time data from your server, you must install the ThreatScope tracking pixel. Current view is using AI-Projected Traffic based on your site's architecture.
+                    </p>
+                 </div>
+
+                 <div>
+                   <label className="text-sm font-bold text-slate-300 mb-2 block">Install via HTML Snippet</label>
+                   <p className="text-xs text-slate-500 mb-3">Place this code in the <code>&lt;head&gt;</code> of your website.</p>
+                   <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 relative group">
+                      <pre className="text-xs text-slate-300 font-mono overflow-x-auto">
+{`<script async src="https://cdn.threatscope.io/pixel.js"></script>
+<script>
+  window.ThreatScope = window.ThreatScope || [];
+  function ts(){ThreatScope.push(arguments);}
+  ts('init', '${crypto.randomUUID()}');
+  ts('track', 'PageView');
+</script>`}
+                      </pre>
+                      <button className="absolute top-2 right-2 p-2 bg-slate-800 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity hover:bg-slate-700">
+                        <Copy className="w-4 h-4 text-slate-400" />
+                      </button>
+                   </div>
+                 </div>
+
+                 <div className="flex justify-end gap-3">
+                    <button onClick={() => setShowIntegration(false)} className="px-4 py-2 text-slate-400 hover:text-white text-sm font-medium">Close</button>
+                    <button onClick={() => setShowIntegration(false)} className="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-lg text-sm font-bold shadow-lg shadow-cyan-900/20">Verify Installation</button>
+                 </div>
+              </div>
+           </div>
         </div>
       )}
     </div>

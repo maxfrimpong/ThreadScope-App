@@ -1,5 +1,5 @@
-
 import { ScanResult, ThreatLevel, ScanType, DailyStat, SystemHealth, GeoStat, MockUser, UserRole, SubscriptionTier, ThreatEvent, BotLog, BotCategory } from '../types';
+import { TrafficProfile } from './gemini';
 
 // Initial mock data
 const INITIAL_HISTORY: ScanResult[] = [
@@ -87,9 +87,6 @@ const HUMAN_BROWSERS = [
   { name: 'Chrome Mobile', agent: 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36' },
   { name: 'Firefox', agent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0' }
 ];
-
-const HUMAN_PATHS = ['/', '/login', '/dashboard', '/pricing', '/features', '/about', '/contact', '/blog', '/blog/security-101', '/products/item-24'];
-const BOT_PATHS = ['/wp-admin', '/admin', '/.env', '/config.php', '/api/v1/users', '/robots.txt', '/sitemap.xml', '/backup.zip'];
 
 class MockDB {
   private history: ScanResult[] = [...INITIAL_HISTORY];
@@ -224,7 +221,7 @@ class MockDB {
 
   // --- Bot & Traffic Generation ---
   
-  generateBotTraffic(count: number = 1): BotLog[] {
+  generateBotTraffic(count: number = 1, profile?: TrafficProfile): BotLog[] {
     const logs: BotLog[] = [];
     
     for (let i = 0; i < count; i++) {
@@ -239,19 +236,25 @@ class MockDB {
       let entity, path, statusCode;
       const location = LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
 
+      // Use Profile Specific Paths if available
+      const humanPaths = profile?.normalPaths || ['/', '/login', '/dashboard'];
+      const badPaths = profile?.vulnerablePaths || ['/wp-admin', '/.env', '/config.php'];
+      const adminPaths = profile?.adminPaths || ['/admin'];
+      const botPaths = [...badPaths, '/robots.txt', '/sitemap.xml'];
+
       if (type === 'HUMAN') {
          entity = HUMAN_BROWSERS[Math.floor(Math.random() * HUMAN_BROWSERS.length)];
-         path = HUMAN_PATHS[Math.floor(Math.random() * HUMAN_PATHS.length)];
+         path = humanPaths[Math.floor(Math.random() * humanPaths.length)];
          statusCode = 200;
-         // Occasionally a 404 for human
          if (Math.random() > 0.95) statusCode = 404;
       } else if (type === 'GOOD_BOT') {
          entity = GOOD_BOTS[Math.floor(Math.random() * GOOD_BOTS.length)];
-         path = Math.random() > 0.7 ? '/robots.txt' : HUMAN_PATHS[Math.floor(Math.random() * HUMAN_PATHS.length)];
+         path = Math.random() > 0.7 ? '/robots.txt' : humanPaths[Math.floor(Math.random() * humanPaths.length)];
          statusCode = 200;
       } else {
          entity = BAD_BOTS[Math.floor(Math.random() * BAD_BOTS.length)];
-         path = BOT_PATHS[Math.floor(Math.random() * BOT_PATHS.length)];
+         // Bad bots target vulnerable paths
+         path = botPaths[Math.floor(Math.random() * botPaths.length)];
          statusCode = Math.random() > 0.5 ? 403 : 404;
       }
       
